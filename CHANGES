@@ -1,3 +1,6 @@
+1.6.2 2017-04-21
+- Removed RC4-MD5 encryption method
+
 1.6.1 2017-04-21
 - Removed rarely used encryption method
 - Added AES CTR mode encryption method

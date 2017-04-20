@@ -54,18 +54,6 @@ method_supported =
   'aes-256-cfb': [32, 16]
   'aes-128-ctr': [16, 16]
   'aes-256-ctr': [32, 16]
-  'rc4-md5': [16, 16]
-
-
-create_rc4_md5_cipher = (key, iv, op) ->
-  md5 = crypto.createHash('md5')
-  md5.update(key)
-  md5.update(iv)
-  rc4_key = md5.digest()
-  if op == 1
-    return crypto.createCipheriv('rc4', rc4_key, '')
-  else
-    return crypto.createDecipheriv('rc4', rc4_key, '')
 
 
 class Encryptor
@@ -89,13 +77,10 @@ class Encryptor
       if op == 1
         @cipher_iv = iv.slice(0, m[1])
       iv = iv.slice(0, m[1])
-      if method == 'rc4-md5'
-        return create_rc4_md5_cipher(key, iv, op)
+      if op == 1
+        return crypto.createCipheriv(method, key, iv)
       else
-        if op == 1
-          return crypto.createCipheriv(method, key, iv)
-        else
-          return crypto.createDecipheriv(method, key, iv)
+        return crypto.createDecipheriv(method, key, iv)
 
   encrypt: (buf) ->
     result = @cipher.update buf
@@ -125,16 +110,11 @@ encryptAll = (password, method, op, data) ->
   if op == 1
     iv = crypto.randomBytes ivLen
     result.push iv
+    cipher = crypto.createCipheriv(method, key, iv)
   else
     iv = data.slice 0, ivLen
     data = data.slice ivLen
-  if method == 'rc4-md5'
-    cipher = create_rc4_md5_cipher(key, iv, op)
-  else
-    if op == 1
-      cipher = crypto.createCipheriv(method, key, iv)
-    else
-      cipher = crypto.createDecipheriv(method, key, iv)
+    cipher = crypto.createDecipheriv(method, key, iv)
   result.push cipher.update(data)
   result.push cipher.final()
   return Buffer.concat result
