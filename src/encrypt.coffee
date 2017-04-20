@@ -22,7 +22,6 @@
 
 crypto = require("crypto")
 util = require("util")
-int32Max = Math.pow(2, 32)
 
 bytes_to_key_results = {}
 
