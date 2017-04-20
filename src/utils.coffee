@@ -89,7 +89,7 @@ exports.checkConfig = (config) ->
   if config.server in ['127.0.0.1', 'localhost']
     exports.warn "Server is set to #{config.server}, maybe it's not correct"
     exports.warn "Notice server will listen at #{config.server}:#{config.server_port}"
-  if (config.method or '').toLowerCase() == 'rc4'
+  if (config.method or '').toLowerCase() == 'rc4-md5'
     exports.warn 'RC4 is not safe; please use a safer cipher, like AES-256-CFB'
 
 exports.version = "#{pack.name} v#{pack.version}"
