@@ -22,49 +22,7 @@
 
 crypto = require("crypto")
 util = require("util")
-merge_sort = require("./merge_sort").merge_sort
 int32Max = Math.pow(2, 32)
-
-cachedTables = {} # password: [encryptTable, decryptTable]
-
-getTable = (key) ->
-  if cachedTables[key]
-    return cachedTables[key]
-  util.log "calculating ciphers"
-  table = new Array(256)
-  decrypt_table = new Array(256)
-  md5sum = crypto.createHash("md5")
-  md5sum.update key
-  hash = new Buffer(md5sum.digest(), "binary")
-  al = hash.readUInt32LE(0)
-  ah = hash.readUInt32LE(4)
-  i = 0
-
-  while i < 256
-    table[i] = i
-    i++
-  i = 1
-
-  while i < 1024
-    table = merge_sort(table, (x, y) ->
-      ((ah % (x + i)) * int32Max + al) % (x + i) - ((ah % (y + i)) * int32Max + al) % (y + i)
-    )
-    i++
-  i = 0
-  while i < 256
-    decrypt_table[table[i]] = i
-    ++i
-  result = [table, decrypt_table]
-  cachedTables[key] = result
-  result
-  
-substitute = (table, buf) ->
-  i = 0
-
-  while i < buf.length
-    buf[i] = table[buf[i]]
-    i++
-  buf
 
 bytes_to_key_results = {}
 
@@ -122,12 +80,7 @@ create_rc4_md5_cipher = (key, iv, op) ->
 class Encryptor
   constructor: (@key, @method) ->
     @iv_sent = false
-    if @method == 'table'
-      @method = null
-    if @method?
-      @cipher = @get_cipher(@key, @method, 1, crypto.randomBytes(32))
-    else
-      [@encryptTable, @decryptTable] = getTable(@key)
+    @cipher = @get_cipher(@key, @method, 1, crypto.randomBytes(32))
       
   get_cipher_len: (method) ->
     method = method.toLowerCase()
@@ -154,64 +107,48 @@ class Encryptor
           return crypto.createDecipheriv(method, key, iv)
 
   encrypt: (buf) ->
-    if @method?
-      result = @cipher.update buf
-      if @iv_sent
-        return result
-      else
-        @iv_sent = true
-        return Buffer.concat([@cipher_iv, result])
+    result = @cipher.update buf
+    if @iv_sent
+      return result
     else
-      substitute @encryptTable, buf
+      @iv_sent = true
+      return Buffer.concat([@cipher_iv, result])
       
   decrypt: (buf) ->
-    if @method?
-      if not @decipher?
-        decipher_iv_len = @get_cipher_len(@method)[1]
-        decipher_iv = buf.slice(0, decipher_iv_len) 
-        @decipher = @get_cipher(@key, @method, 0, decipher_iv)
-        result = @decipher.update(buf.slice(decipher_iv_len))
-        return result
-      else
-        result = @decipher.update(buf)
-        return result
+    if not @decipher?
+      decipher_iv_len = @get_cipher_len(@method)[1]
+      decipher_iv = buf.slice(0, decipher_iv_len) 
+      @decipher = @get_cipher(@key, @method, 0, decipher_iv)
+      result = @decipher.update(buf.slice(decipher_iv_len))
+      return result
     else
-      substitute @decryptTable, buf
+      result = @decipher.update(buf)
+      return result
 
 encryptAll = (password, method, op, data) ->
-  if method == 'table'
-    method = null
-  if not method?
-    [encryptTable, decryptTable] = getTable(password)
-    if op is 0
-      return substitute(decryptTable, data)
-    else
-      return substitute(encryptTable, data)
+  result = []
+  method = method.toLowerCase()
+  [keyLen, ivLen] = method_supported[method]
+  password = Buffer(password, 'binary')
+  [key, iv_] = EVP_BytesToKey(password, keyLen, ivLen) 
+  if op == 1
+    iv = crypto.randomBytes ivLen
+    result.push iv
   else
-    result = []
-    method = method.toLowerCase()
-    [keyLen, ivLen] = method_supported[method]
-    password = Buffer(password, 'binary')
-    [key, iv_] = EVP_BytesToKey(password, keyLen, ivLen) 
+    iv = data.slice 0, ivLen
+    data = data.slice ivLen
+  if method == 'rc4-md5'
+    cipher = create_rc4_md5_cipher(key, iv, op)
+  else
     if op == 1
-      iv = crypto.randomBytes ivLen
-      result.push iv
+      cipher = crypto.createCipheriv(method, key, iv)
     else
-      iv = data.slice 0, ivLen
-      data = data.slice ivLen
-    if method == 'rc4-md5'
-      cipher = create_rc4_md5_cipher(key, iv, op)
-    else
-      if op == 1
-        cipher = crypto.createCipheriv(method, key, iv)
-      else
-        cipher = crypto.createDecipheriv(method, key, iv)
-    result.push cipher.update(data)
-    result.push cipher.final()
-    return Buffer.concat result
+      cipher = crypto.createDecipheriv(method, key, iv)
+  result.push cipher.update(data)
+  result.push cipher.final()
+  return Buffer.concat result
 
 
 exports.Encryptor = Encryptor
-exports.getTable = getTable
 exports.encryptAll = encryptAll
 

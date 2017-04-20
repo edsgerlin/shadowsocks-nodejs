@@ -1,3 +1,6 @@
+1.6.0 2017-04-21
+- Removed table encryption method
+
 1.5.3 2014-11-01
 - Fix multiple servers on local side
 
